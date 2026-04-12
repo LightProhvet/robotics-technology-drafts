@@ -1,0 +1,6 @@
+[submodule "src/robotont_description"]
+	path = src/robotont_description
+	url = https://github.com/robotont/robotont_description
+[submodule "src/robotont_simple_simulator"]
+	path = src/robotont_simple_simulator
+	url = https://github.com/robotont/robotont_simple_simulator
