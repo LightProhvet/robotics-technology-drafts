@@ -4,3 +4,6 @@
 [submodule "src/robotont_simple_simulator"]
 	path = src/robotont_simple_simulator
 	url = https://github.com/robotont/robotont_simple_simulator
+[submodule "src/ros2_aruco"]
+	path = src/ros2_aruco
+	url = https://github.com/JMU-ROBOTICS-VIVA/ros2_aruco
