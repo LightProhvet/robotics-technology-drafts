@@ -1,0 +1,84 @@
+<?xml version="1.0"?>
+<robot name="fourwheeler" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <xacro:property name="base_width" value="0.520"/>
+    <xacro:property name="base_length" value="0.430"/>
+    <xacro:property name="base_height" value="0.140"/>
+    <xacro:property name="wheel_width" value="0.05"/>
+    <xacro:property name="wheel_radius" value="0.2"/>
+    <xacro:property name="lowrider" value="0"/>
+
+    <xacro:property name="half_track" value="${base_width/2 + wheel_width/2}"/>
+    <xacro:property name="wheel_offset" value="${base_length/4}"/>
+
+    <link name="base_link">
+        <visual>
+            <geometry>
+                <box size="${base_length} ${base_width} ${base_height}"/>
+            </geometry>
+            <material name="blue">
+                <color rgba="0 0 0.8 1"/>
+            </material>
+        </visual>
+    </link>
+
+    <xacro:macro name="wheel" params="wheel_name reflect_y reflect_x">
+    <link name="${wheel_name}">
+        <visual>
+            <geometry>
+                <cylinder length="${wheel_width}" radius="${wheel_radius}"/>
+            </geometry>
+            <material name="black">
+                <color rgba="0 0 0 1"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="${wheel_name}_to_base" type="continuous">
+        <parent link="base_link"/>
+        <child link="${wheel_name}"/>
+        <origin xyz="${reflect_x*wheel_offset} ${reflect_y * half_track} ${-0.05 + lowrider}" rpy="1.57 0 0"/>
+        <axis xyz="0 0 1"/>
+    </joint>
+    </xacro:macro>
+
+    <xacro:wheel wheel_name="front_left_wheel" reflect_y="1" reflect_x="1"/>
+    <xacro:wheel wheel_name="front_right_wheel" reflect_y="-1" reflect_x="1"/>
+    <xacro:wheel wheel_name="back_left_wheel" reflect_y="1" reflect_x="-1"/>
+    <xacro:wheel wheel_name="back_right_wheel" reflect_y="-1" reflect_x="-1"/>
+
+
+
+    <link name="hood">
+        <visual>
+            <geometry>
+                <box size="0.530 0.420 0.005"/>
+            </geometry>
+            <material name="yellow">
+                <color rgba="0.8 0.8 0 1"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="hood_to_base" type="fixed">
+        <parent link="base_link"/>
+        <child link="hood"/>
+        <origin xyz="0 0 0.0725"/>
+    </joint>
+
+
+    <link name="lidar">
+        <visual>
+            <geometry>
+                <cylinder length="0.08" radius="0.05"/>
+            </geometry>
+            <material name="Gray">
+                <color rgba="0.7 0.7 0.7 1"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="lidar_to_hood" type="continuous">
+        <parent link="hood"/>
+        <child link="lidar"/>
+        <origin xyz="0.15 0 0.04" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+    </joint>
+</robot>

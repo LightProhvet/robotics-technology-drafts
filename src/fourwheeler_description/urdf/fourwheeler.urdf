@@ -1,0 +1,116 @@
+<?xml version="1.0"?>
+<robot name="fourwheeler">
+
+    <link name="base_link">
+        <visual>
+            <geometry>
+                <box size="0.430 0.320 0.140"/>
+            </geometry>
+            <material name="blue">
+                <color rgba="1 1 1 1"/>
+            </material>
+        </visual>
+    </link>
+
+    <link name="front_right_wheel">
+        <visual>
+            <geometry>
+                <cylinder length="0.05" radius="0.1"/>
+            </geometry>
+            <material name="black">
+                <color rgba="0 0 0 1"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="front_right_wheel_to_base" type="continuous">
+        <parent link="base_link"/>
+        <child link="front_right_wheel"/>
+        <origin xyz="0.1075 -0.1851 -0.05" rpy="1.57 0 0"/>
+        <axis xyz="0 0 1"/>
+    </joint>
+
+    <link name="front_left_wheel">
+        <visual>
+            <geometry>
+                <cylinder length="0.05" radius="0.1"/>
+            </geometry>
+            <material name="black">
+                <color rgba="0 0 0 1"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="front_left_wheel_to_base" type="continuous">
+        <parent link="base_link"/>
+        <child link="front_left_wheel"/>
+        <origin xyz="0.1075 0.1851 -0.05" rpy="1.57 0 0"/>
+        <axis xyz="0 0 1"/>
+    </joint>
+
+    <link name="rear_right_wheel">
+        <visual>
+            <geometry>
+                <cylinder length="0.05" radius="0.1"/>
+            </geometry>
+            <material name="black">
+                <color rgba="0 0 0 1"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="rear_right_wheel_to_base" type="continuous">
+        <parent link="base_link"/>
+        <child link="rear_right_wheel"/>
+        <origin xyz="-0.1075 -0.1851 -0.05" rpy="1.57 0 0"/>
+        <axis xyz="0 0 1"/>
+    </joint>
+
+    <link name="rear_left_wheel">
+        <visual>
+            <geometry>
+                <cylinder length="0.05" radius="0.1"/>
+            </geometry>
+            <material name="black">
+                <color rgba="0 0 0 1"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="rear_left_wheel_to_base" type="continuous">
+        <parent link="base_link"/>
+        <child link="rear_left_wheel"/>
+        <origin xyz="-0.1075 0.1851 -0.05" rpy="1.57 0 0"/>
+        <axis xyz="0 0 1"/>
+    </joint>
+
+    <link name="hood">
+        <visual>
+            <geometry>
+                <box size="0.530 0.420 0.005"/>
+            </geometry>
+            <material name="yellow">
+                <color rgba="0.8 0.8 0 1"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="hood_to_base" type="fixed">
+        <parent link="base_link"/>
+        <child link="hood"/>
+        <origin xyz="0 0 0.0725"/>
+    </joint>
+
+
+    <link name="lidar">
+        <visual>
+            <geometry>
+                <cylinder length="0.08" radius="0.05"/>
+            </geometry>
+            <material name="Gray">
+                <color rgba="0.7 0.7 0.7 1"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="lidar_to_hood" type="continuous">
+        <parent link="hood"/>
+        <child link="lidar"/>
+        <origin xyz="0.15 0 0.04" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+    </joint>
+</robot>

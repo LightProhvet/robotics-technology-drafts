@@ -1,6 +1,6 @@
 # robotics-technology-drafts
 
-## Lab2
+## Lab3
 
 In the classroom start with 
 ```bash
@@ -13,248 +13,265 @@ gh auth logout
 
 ### Goal
 0) Test an existing package as a demo
-1) Create a new ROS package and name it simple_path_planner.
-
-2) Within the simple_path_planner create a ROS node - let us name it trajectory_commander - that publishes geometry_msgs/msg/Twist messages on a topic “cmd_vel”.
-
-3) Within the trajectory_commander node implement functionality to make the robot drive along the following four different paths:
-* simple square (side length of at least 1 m)
-* non-holonomic square (side length of at least 1 m)
-* circle
-* shape of 8
-4) The solution should be demonstrated in a scenario where the robot’s linear speed is 0.2 m/s.
-5) Test and validate your solution using the Robotont’s Simple Simulator package.
-
-
-Bonus: connect to the robot
+1) Build the robots as per tutorials
+2) Parameterize the four-wheeler created in Learning Nugget 1 as shown
+3) Create a new ROS package rt_humanoid_description and in this package describe a humanoid robot.
+ It must be possible to move the legs and arms.
+ Create launch file for demo. 
 ---
 
-### Step 0 — I already had this, but init some dependencies and ensure structure
+### Step 0 — download and analyse the boilerplate package
 
-sudo apt install python3-colcon-common-extensions
-mkdir -p src
-
----
-
-### Step 1 — Add submodules
-
+If you haven't already, create the src folder
 ```bash
 cd src
-git submodule add https://github.com/robotont/robotont_description
-git submodule add https://github.com/robotont/robotont_simple_simulator
+git clone https://github.com/unitartu-edu/fourwheeler_description.git
+sudo rm fourwheeler_description/.git/ -R
 cd ..
 ```
+I'm not sure what to bring out from the rviz config, launch or urdf. They are in their respective folders so finding them is easy.
+The syntax is pretty straightforward as well. 
 
----
+e.g:
+rviz config: 2 panels, 3 displays in the manager, 2 views - 1 is a placeholder for saved views i think. and Window geometry describes macro - Displays: collapsed: false - ensure displays are expanded not collapsed. 
 
-### Step 2 — use rosdep to solve dependencies and build
+launch: adds 3 actions for nodes - 1) robot state 2) joint state 3) rviz
 
+urdf: 1 robot object with 1 link with only visuals (geometry and material)
+
+"Let us now build our colcon workspace and launch the one launch-file from the package." 
+(I had problem some CMAKE problem colcon build failed so i basically had to build twice, but it's irrelevant)
 ```bash
 sudo rosdep init
 rosdep update
 rosdep install --from-paths src -y --ignore-src
-```
-I also needed setup before building:
-```bash
-cd src/robotont_description/
-git checkout humble-devel cd ../..
-```
-Then i changed the name of the launch file in the sample simulator:
-
-display_robot_model - display_simulated_robot
-
-(original line was
-os.path.join(get_package_share_directory('robot
-         -ont_description'), 'launch/display_robot_model.launch.py')
-)
-
-```bash
 colcon build
+sourcenow
+ros2 launch fourwheeler_description displ	ay.launch.py
 ```
 ---
 
-### Step 3 — Test the robotont simulator
+### Step 1 — URDF tutorial video
 
 ```bash
-sourcenow
-ros2 launch robotont_simple_simulator simple_driver.launch.py
+sudo apt-get install ros-humble-urdf-tutorial
+sudo apt install ros-humble-joint-state-publisher-gui
+```
+And after defining your URDF i launched with: (NB either have your own launch file or give your own correct path)
+```bash
+ros2 launch urdf_tutorial display.launch.py model:=/home/lightprohvet/Schoolplace/Robotitehnoloogia/src/fourwheeler_description/urdf/fourwheeler.urdf
 ```
 
 ---
 
-### Step 4 — Create the package
+### Step 2 — XACRO tutorial video
+ASK: why no mention of setting base link origin?
+I changed the launch file to use the .xacro file. 
+obviously After copy i made the changes, but the general idea is
+
+```bash
+cp fourwheeler.urdf fourwheeler.urdf.xacro
+ros2 launch fourwheeler_description display.launch.py
+```
+I originally used this, like before
+```bash
+cp fourwheeler.urdf fourwheeler.urdf.xacro
+ros2 launch urdf_tutorial display.launch.py model:=/home/lightprohvet/Schoolplace/Robotitehnoloogia/src/fourwheeler_description/urdf/fourwheeler.urdf.xacro
+```
+---
+
+### Step 3 — create humanoid package
+I mean i don't think there are any valid scenarios where i would just design a humanoid robot from scratch - unless i do it part by part, in which case - i'm still not doing a humanoid robot from scratch - the humanoid comes from assembling the existing parts. If i just need to have a humanoid in my simulation i'd use an existing one, e.g https://github.com/robot-descriptions/awesome-robot-descriptions/tree/main
+
+So i will do the simplest one, as shown in one of the images: sphere head, sylinder body, 4 rectangular limbs.
+The limbs need 2 links so i could rotate them in 2 dimensions as one joint can only have 1 parent. I demonstrate 2 ways to avoid collision, but neither of them work 100% in rviz. Collisions don't work in rviz at all, and limits are not strict enough, as i did not bother with the math. 
+
+NB: the dependencies are not real dependencies. I just based them off the fourwheeler - ensures they exist during demo
 
 ```bash
 cd src
-ros2 pkg create --build-type ament_python simple_path_planner \
-  --dependencies rclpy geometry_msgs
+ros2 pkg create --build-type ament_cmake rt_humanoid_description --dependencies joint_state_publisher_gui robot_state_publisher
+mkdir -p rt_humanoid_description/urdf rt_humanoid_description/launch rt_humanoid_description/config
 cd ..
 ```
 
----
+Update `CMakeLists.txt` to install the directories — replace the `find_package(joint_state_publisher_gui REQUIRED)
+find_package(robot_state_publisher REQUIRED)` block with:
+```
+install(
+  DIRECTORY urdf launch config
+  DESTINATION share/${PROJECT_NAME}
+)
+```
 
-### Step 5 — Create the `trajectory_commander` node
 
-Each path is represented as a flat sequence of `(linear, angular, duration)` tuples. A 20 Hz timer steps through them one by one, publishing the corresponding `Twist` until the step's duration expires, then advancing to the next. When the sequence ends, a zero `Twist` stops the robot.
-
-The path to run is selected via a ROS parameter at launch time. `_build_sequence` dispatches to a per-path method using `getattr(self, f'_path_{path}')`, so adding a new path only requires adding a new method — no branching needed in the dispatcher.
-
-All paths use `LINEAR_SPEED = 0.2 m/s`:
-- **square** — drive straight, turn in place 90°, repeat × 4
-- **nh_square** — same, but corners are arc turns (simultaneous linear + angular) instead of point turns. TODO: Ask about non-holonomic shapes - IS it just an engineering thing or why it exists?
-- **circle** — constant forward + angular velocity for one full loop
-- **eight** — two circles in opposite directions
+Create the URDF:
 
 ```bash
-cat > src/simple_path_planner/simple_path_planner/trajectory_commander.py << 'EOF'
-import math
-import rclpy
-from rclpy.node import Node
-from geometry_msgs.msg import Twist
+cat > src/rt_humanoid_description/urdf/humanoid.urdf.xacro << 'EOF'
+<?xml version="1.0"?>
+<robot name="humanoid" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-LINEAR_SPEED = 0.2   # m/s
-SIDE = 1.0           # m
-TURN_SPEED = 0.5     # rad/s (in-place turns)
-CIRCLE_RADIUS = 0.5  # m
+    <xacro:property name="body_length" value="0.430"/>
+    <xacro:property name="body_radius" value="0.1"/>
+    <xacro:property name="head_radius" value="0.15"/>
+    <xacro:property name="arm_length" value="0.25"/>
+    <xacro:property name="arm_radius" value="0.05"/>
+    <xacro:property name="leg_length" value="0.3"/>
+    <xacro:property name="leg_radius" value="0.08"/>
 
+    <link name="base_link">
+        <visual>
+            <geometry>
+                <cylinder length="${body_length}" radius="${body_radius}"/>
+            </geometry>
+            <material name="red">
+                <color rgba="0.8 0 0 1"/>
+            </material>
+        </visual>
+        <collision>
+            <geometry>
+                <cylinder length="${body_length}" radius="${body_radius}"/>
+            </geometry>
+        </collision>
+    </link>
 
-class TrajectoryCommander(Node):
-    def __init__(self):
-        super().__init__('trajectory_commander')
-        self.declare_parameter('path', 'square')
-        path = self.get_parameter('path').get_parameter_value().string_value
+    <link name="head">
+        <visual>
+            <geometry>
+                <sphere radius="${head_radius}"/>
+            </geometry>
+            <material name="blue">
+                <color rgba="0 0 0.8 1"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="head_swivel" type="fixed">
+        <parent link="base_link"/>
+        <child link="head"/>
+        <origin xyz="0 0 ${body_length/2 + head_radius}"/>
+    </joint>
 
-        self.pub = self.create_publisher(Twist, 'cmd_vel', 10)
-        self.sequence = self._build_sequence(path)
-        self.step = 0
-        self.step_start = self.get_clock().now()
-        self.create_timer(0.05, self._tick)
-        self.get_logger().info(f'trajectory_commander started, path={path}')
+    <xacro:macro name="arm" params="arm_name reflect_y">
+        <link name="${arm_name}_pivot"/>
+        <joint name="${arm_name}_side_to_side" type="revolute">
+            <parent link="base_link"/>
+            <child link="${arm_name}_pivot"/>
+            <origin xyz="0 ${reflect_y * (body_radius + arm_radius)} ${body_length/2 - arm_radius}"/>
+            <axis xyz="1 0 0"/>
+            <limit lower="0" upper="3.14" effort="10" velocity="1"/>
+        </joint>
+        <link name="${arm_name}">
+            <visual>
+                <origin xyz="0 0 -${arm_length/2}"/>
+                <geometry>
+                    <cylinder length="${arm_length}" radius="${arm_radius}"/>
+                </geometry>
+                <material name="blue">
+                    <color rgba="0 0 0.8 1"/>
+                </material>
+            </visual>
+        </link>
+        <joint name="${arm_name}_front_to_back" type="revolute">
+            <parent link="${arm_name}_pivot"/>
+            <child link="${arm_name}"/>
+            <origin xyz="0 0 0"/>
+            <axis xyz="0 1 0"/>
+            <limit lower="-1.57" upper="1.57" effort="10" velocity="1"/>
+        </joint>
+    </xacro:macro>
 
-    def _build_sequence(self, path):
-        straight_t = SIDE / LINEAR_SPEED                  # 5.0 s
-        turn_t = (math.pi / 2) / TURN_SPEED              # ~3.14 s
+    <xacro:macro name="leg" params="leg_name reflect_y">
+        <link name="${leg_name}_pivot"/>
+        <joint name="${leg_name}_side_to_side" type="continuous">
+            <parent link="base_link"/>
+            <child link="${leg_name}_pivot"/>
+            <origin xyz="0 ${reflect_y * (body_radius/2 + leg_radius)} -${body_length/2}"/>
+            <axis xyz="1 0 0"/>
+        </joint>
+        <link name="${leg_name}">
+            <visual>
+                <origin xyz="0 0 -${leg_length/2}"/>
+                <geometry>
+                    <cylinder length="${leg_length}" radius="${leg_radius}"/>
+                </geometry>
+                <material name="blue">
+                    <color rgba="0 0 0.8 1"/>
+                </material>
+            </visual>
+            <collision>
+                <origin xyz="0 0 -${leg_length/2}"/>
+                <geometry>
+                    <cylinder length="${leg_length}" radius="${leg_radius}"/>
+                </geometry>
+            </collision>
+        </link>
+        <joint name="${leg_name}_front_to_back" type="continuous">
+            <parent link="${leg_name}_pivot"/>
+            <child link="${leg_name}"/>
+            <origin xyz="0 0 0"/>
+            <axis xyz="0 1 0"/>
+        </joint>
+    </xacro:macro>
 
-        if path == 'square':
-            return [(LINEAR_SPEED, 0.0, straight_t),
-                    (0.0, TURN_SPEED, turn_t)] * 4
+    <xacro:arm arm_name="left_arm" reflect_y="1"/>
+    <xacro:arm arm_name="right_arm" reflect_y="-1"/>
+    <xacro:leg leg_name="left_leg" reflect_y="1"/>
+    <xacro:leg leg_name="right_leg" reflect_y="-1"/>
 
-        if path == 'nh_square':
-            r = 0.3
-            omega = LINEAR_SPEED / r
-            arc_t = (math.pi / 2) / omega
-            return [(LINEAR_SPEED, 0.0, straight_t),
-                    (LINEAR_SPEED, omega, arc_t)] * 4
-
-        if path == 'circle':
-            omega = LINEAR_SPEED / CIRCLE_RADIUS
-            circle_t = 2 * math.pi * CIRCLE_RADIUS / LINEAR_SPEED
-            return [(LINEAR_SPEED, omega, circle_t)]
-
-        if path == 'eight':
-            omega = LINEAR_SPEED / CIRCLE_RADIUS
-            circle_t = 2 * math.pi * CIRCLE_RADIUS / LINEAR_SPEED
-            return [(LINEAR_SPEED, omega, circle_t),
-                    (LINEAR_SPEED, -omega, circle_t)]
-
-        self.get_logger().error(f'Unknown path: {path}')
-        return []
-
-    def _tick(self):
-        if self.step >= len(self.sequence):
-            self.pub.publish(Twist())  # stop
-            return
-
-        linear, angular, duration = self.sequence[self.step]
-        elapsed = (self.get_clock().now() - self.step_start).nanoseconds / 1e9
-
-        if elapsed >= duration:
-            self.step += 1
-            self.step_start = self.get_clock().now()
-            return
-
-        msg = Twist()
-        msg.linear.x = linear
-        msg.angular.z = angular
-        self.pub.publish(msg)
-
-
-def main(args=None):
-    rclpy.init(args=args)
-    rclpy.spin(TrajectoryCommander())
-    rclpy.shutdown()
+</robot>
 EOF
 ```
 
----
-
-### Step 6 — Register the node in `setup.py`
-
-In `src/simple_path_planner/setup.py`, update `entry_points`:
-
-```python
-entry_points={
-    'console_scripts': [
-        'trajectory_commander = simple_path_planner.trajectory_commander:main',
-    ],
-},
-```
-
----
-
-### Step 7 — Build
+Copy the RViz config from fourwheeler_description (same 3-node setup):
 
 ```bash
-(sourcehumble)
-colcon build --packages-select simple_path_planner
+cp src/fourwheeler_description/config/fw.rviz src/rt_humanoid_description/config/fw.rviz
+```
+
+Create the launch file:
+
+```bash
+cat > src/rt_humanoid_description/launch/display.launch.py << 'EOF'
+from ament_index_python.packages import get_package_share_directory
+import os
+from launch import LaunchDescription
+from launch.substitutions import Command, LaunchConfiguration
+from launch.actions import DeclareLaunchArgument
+from launch_ros.actions import Node
+
+def generate_launch_description():
+    ld = LaunchDescription()
+    pkg_dir = get_package_share_directory('rt_humanoid_description')
+    robot_description = os.path.join(pkg_dir, 'urdf/humanoid.urdf.xacro')
+
+    ld.add_action(DeclareLaunchArgument(name='model', default_value=str(robot_description),
+                                        description='Absolute path to robot urdf/xacro file'))
+    ld.add_action(Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        parameters=[{'robot_description': Command(['xacro ', LaunchConfiguration('model')])}]
+    ))
+    ld.add_action(Node(
+        package='joint_state_publisher_gui',
+        executable='joint_state_publisher_gui'
+    ))
+    ld.add_action(Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        output='screen',
+        arguments=['-d' + os.path.join(pkg_dir, 'config', 'fw.rviz')],
+    ))
+    return ld
+EOF
+```
+
+Build and launch:
+
+```bash
+colcon build --packages-select rt_humanoid_description
 sourcenow
+ros2 launch rt_humanoid_description display.launch.py
 ```
-
----
-
-### Step 8 — Run
-
-In Terminal 1, launch the simulator:
-
-```bash
-sourcenow
-ros2 launch robotont_simple_simulator simple_driver.launch.py
-```
-
-In Terminal 2, run the trajectory (replace `square` with `nh_square`, `circle`, or `eight`):
-
-```bash
-sourcenow
-ros2 run simple_path_planner trajectory_commander --ros-args -p path:=square
-```
-
-
----
-
-### BONUS
-### STEP 1 — correct internet validation?
-(source before use)
-On the ROBOT!
-```bash
-ros2 run demo_nodes_cpp talker
-```
-
-In your computer:
-```bash
-ros2 run demo_nodes_cpp listener
-```
----
-
-### Step 2 — connect to robot from pc	
-use the correct Ip address from checking wifi details on the robot or
-$user@$machine_name
-
-I assume the classroom computers have ssh keys set up, if not - ssh-keygen
-```bash
-ssh peko@robotont-3
-tail ~/.bashrc
-```
-
-If problems - Explicitly set the middleware with::
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 
