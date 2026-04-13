@@ -153,7 +153,18 @@ ros2 launch ar_tracking display.launch.py
 
 
 ### Step 5 — Learning milestone: AR tag steering node
+https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles - see section "Quaternion to angles (in ZYX sequence) conversion"
+I don't know around which axis the rotation is. I'm using Z in the example, but if it doesn't work i just need to swtich the formula between these:
+Yaw (around Z) — equates to R[1,0] R[0,0]:
+atan2( 2*(w*z + x*y),  1 - 2*(y² + z²) )
+                 
+Pitch (around Y) - equates to -R[2,0]:
+asin(2*(w*y -x*z))
 
+using asin is simpler, but i think it adds limits to turning - if something is weird use the more complicated version given with others.                                                                                
+                                              
+Roll (around X) - equates to R[2,1] R[2,2]:
+atan2( 2*(w*x + y*z),  1 - 2*(x² + y²) )
 
 ```bash
 cat > src/ar_tracking/ar_tracking/aruco_steering_node.py << 'EOF'
