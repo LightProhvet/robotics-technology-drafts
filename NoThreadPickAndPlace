@@ -139,29 +139,25 @@ Create the node file:
 
 ```bash
 cat > src/xarm_pick_and_place/src/pick_and_place.cpp << 'EOF'
+#include <memory>
 #include <rclcpp/rclcpp.hpp>
-#include <moveit/move_group_interface/move_group_interface.h>
+#include <moveit/move_group_interface/move_group_interface.hpp>
 
 int main(int argc, char* argv[])
 {
     rclcpp::init(argc, argv);
-    auto node = rclcpp::Node::make_shared(
-        "pick_and_place",
-        rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true)
-    );
+    auto const node = std::make_shared<rclcpp::Node>("pick_and_place");
+    auto const logger = rclcpp::get_logger("pick_and_place");
 
-    // Separate thread for spinning so MoveIt callbacks are processed
-    rclcpp::executors::SingleThreadedExecutor executor;
-    executor.add_node(node);
-    std::thread spin_thread([&executor]() { executor.spin(); });
+    using moveit::planning_interface::MoveGroupInterface;
 
     // Arm group
-    moveit::planning_interface::MoveGroupInterface arm(node, "xarm7");
+    auto arm = MoveGroupInterface(node, "xarm7");
     arm.setMaxVelocityScalingFactor(0.3);
     arm.setMaxAccelerationScalingFactor(0.3);
 
     // Gripper group
-    moveit::planning_interface::MoveGroupInterface gripper(node, "xarm_gripper");
+    auto gripper = MoveGroupInterface(node, "xarm_gripper");
 
     auto move_arm = [&](double x, double y, double z) {
         geometry_msgs::msg::Pose target;
@@ -170,58 +166,71 @@ int main(int argc, char* argv[])
         target.position.y = y;
         target.position.z = z;
         arm.setPoseTarget(target);
-        arm.move();
+        MoveGroupInterface::Plan plan;
+        if (arm.plan(plan) == moveit::core::MoveItErrorCode::SUCCESS) {
+            arm.execute(plan);
+        } else {
+            RCLCPP_ERROR(logger, "Arm planning failed!");
+        }
     };
 
     auto open_gripper = [&]() {
         gripper.setNamedTarget("open");
-        gripper.move();
+        MoveGroupInterface::Plan plan;
+        if (gripper.plan(plan) == moveit::core::MoveItErrorCode::SUCCESS) {
+            gripper.execute(plan);
+        } else {
+            RCLCPP_ERROR(logger, "Gripper planning failed!");
+        }
     };
 
     auto close_gripper = [&]() {
         gripper.setNamedTarget("close");
-        gripper.move();
+        MoveGroupInterface::Plan plan;
+        if (gripper.plan(plan) == moveit::core::MoveItErrorCode::SUCCESS) {
+            gripper.execute(plan);
+        } else {
+            RCLCPP_ERROR(logger, "Gripper planning failed!");
+        }
     };
 
     // --- Pick and Place sequence ---
 
     // 1. Open gripper (redundancy)
-    RCLCPP_INFO(node->get_logger(), "Opening gripper");
+    RCLCPP_INFO(logger, "Opening gripper");
     open_gripper();
-    
+
     // 2. Move above location A
-    RCLCPP_INFO(node->get_logger(), "Moving to location A");
+    RCLCPP_INFO(logger, "Moving above location A");
     move_arm(0.3, 0.1, 0.3);
 
     // 3. Lower to grasp
     move_arm(0.3, 0.1, 0.15);
 
     // 4. Close gripper (pick)
-    RCLCPP_INFO(node->get_logger(), "Closing gripper (pick)");
+    RCLCPP_INFO(logger, "Closing gripper (pick)");
     close_gripper();
 
-    // 5. Lift (same as point 1) 
-    RCLCPP_INFO(node->get_logger(), "Moving to location B");
+    // 5. Lift
     move_arm(0.3, 0.1, 0.3);
 
     // 6. Move above location B
+    RCLCPP_INFO(logger, "Moving above location B");
     move_arm(0.3, -0.2, 0.3);
 
     // 7. Lower to place
     move_arm(0.3, -0.2, 0.15);
 
     // 8. Open gripper (place)
-    RCLCPP_INFO(node->get_logger(), "Opening gripper (place)");
+    RCLCPP_INFO(logger, "Opening gripper (place)");
     open_gripper();
 
     // 9. Retreat
-    RCLCPP_INFO(node->get_logger(), "Retreating");
+    RCLCPP_INFO(logger, "Retreating");
     move_arm(0.3, -0.2, 0.3);
 
-    RCLCPP_INFO(node->get_logger(), "Pick and place complete!");
+    RCLCPP_INFO(logger, "Pick and place complete!");
 
-    executor.cancel();
-    spin_thread.join();
     rclcpp::shutdown();
     return 0;
 }
